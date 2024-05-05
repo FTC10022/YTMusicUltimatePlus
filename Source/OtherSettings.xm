@@ -1,61 +1,46 @@
-#import "OtherSettings.h"
+#import "Headers/YTPivotBarItemView.h"
+#import "Headers/YTIPivotBarRenderer.h"
+#import "Headers/YTMWatchViewController.h"
+#import "Headers/YTPivotBarViewController.h"
+#import "Headers/YTPlayabilityResolutionUserActionUIController.h"
 
 static BOOL YTMU(NSString *key) {
     NSDictionary *YTMUltimateDict = [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"YTMUltimate"];
     return [YTMUltimateDict[key] boolValue];
 }
 
-static NSInteger selectedTab() {
-    NSDictionary *YTMUltimateDict = [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"YTMUltimate"];
-    return [YTMUltimateDict[@"startupPage"] integerValue];
-}
-
-static BOOL stickyHeaders = YTMU(@"YTMUltimateIsEnabled") && YTMU(@"noStickyHeaders");
-static BOOL noTabBarLabels = YTMU(@"YTMUltimateIsEnabled") && YTMU(@"noTabBarLabels");
-static BOOL skipWarning = YTMU(@"YTMUltimateIsEnabled") && YTMU(@"skipWarning");
-
 // Headers stuff
 %hook YTLightweightCollectionController
-- (void)setUseStickyHeaders:(bool)arg1 {
-	stickyHeaders ? %orig(NO) : %orig;
+- (void)setUseStickyHeaders:(BOOL)arg1 {
+	YTMU(@"YTMUltimateIsEnabled") && YTMU(@"noStickyHeaders") ? %orig(NO) : %orig;
 }
 %end
 
 %hook YTMSearchTabViewController
 - (bool)shouldUseStickyHeaders {
-	return stickyHeaders ? NO : %orig;
+	return YTMU(@"YTMUltimateIsEnabled") && YTMU(@"noStickyHeaders") ? NO : %orig;
 }
 %end
 
 %hook YTMTabViewController
 - (bool)shouldUseStickyHeaders {
-	return stickyHeaders ? NO : %orig;
+	return YTMU(@"YTMUltimateIsEnabled") && YTMU(@"noStickyHeaders") ? NO : %orig;
 }
 %end
 
 // Make chip clouds (aka headers) background transparent
 %hook YTMChipCloudView
 - (void)setBackgroundColor:(UIColor *)backgroundColor {
-    stickyHeaders ? %orig([UIColor clearColor]) : %orig;
+    YTMU(@"YTMUltimateIsEnabled") && YTMU(@"noStickyHeaders") ? %orig([UIColor clearColor]) : %orig;
 }
 %end
 
 // Tab bar stuff
-BOOL hasHomeBar = NO;
-CGFloat pivotBarViewHeight;
-
-%hook YTPivotBarView
-- (void)layoutSubviews {
-    %orig;
-    pivotBarViewHeight = self.frame.size.height;
-}
-%end
-
 %hook YTPivotBarItemView
 - (void)setRenderer:(YTIPivotBarRenderer *)renderer {
     %orig;
 
-    if (noTabBarLabels) {
+    if (YTMU(@"YTMUltimateIsEnabled") && YTMU(@"noTabBarLabels")) {
         [self.navigationButton setTitle:@"" forState:UIControlStateNormal];
         [self.navigationButton setSizeWithPaddingAndInsets:NO];
     }
@@ -83,7 +68,9 @@ CGFloat pivotBarViewHeight;
         if (index != NSNotFound) {
             [items removeObjectAtIndex:index];
         }
-    } %orig;
+    }
+
+    %orig;
 }
 %end
 
@@ -92,35 +79,35 @@ BOOL isTabSelected = NO;
 
 %hook YTPivotBarViewController
 - (void)viewDidAppear:(BOOL)animated {
-    %orig();
+    %orig;
 
     if (!isTabSelected) {
-        NSString *pivotIdentifier;
-        switch (selectedTab()) {
-            case 0:
-                pivotIdentifier = @"FEmusic_home";
-                break;
-            case 1:
-                pivotIdentifier = @"FEmusic_immersive";
-                break;
-            case 2:
-                pivotIdentifier = @"FEmusic_explore";
-                break;
-            case 3:
-                pivotIdentifier = @"FEmusic_library_landing";
-                break;
-            case 4:
-                pivotIdentifier = @"BHdownloadsVC";
-                break;
-            default:
-                return;
-        }
-        [self selectItemWithPivotIdentifier:pivotIdentifier];
+        NSArray *pivotIdentifiers = @[@"FEmusic_home", @"FEmusic_immersive", @"FEmusic_explore", @"FEmusic_library_landing", @"BHdownloadsVC"];
+
+        NSDictionary *YTMUltimateDict = [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"YTMUltimate"];
+        [self selectItemWithPivotIdentifier:pivotIdentifiers[[YTMUltimateDict[@"startupPage"] integerValue]]];
+
         isTabSelected = YES;
     }
 }
 %end
 
 %hook YTPlayabilityResolutionUserActionUIController
-- (void)showConfirmAlert { skipWarning ? [self confirmAlertDidPressConfirm] : %orig; }
+- (void)showConfirmAlert {
+    YTMU(@"YTMUltimateIsEnabled") && YTMU(@"skipWarning") ? [self confirmAlertDidPressConfirm] : %orig;
+}
+%end
+
+%hook YTMWatchViewController
+- (void)playbackControllerStateDidChange {
+    %orig;
+
+    //Reset all miniplayer restrictions
+    if ([self respondsToSelector:@selector(resetMiniplayerRestrictions)]) {
+        [self resetMiniplayerRestrictions];
+    }
+
+    //Disable auto-pause when player minimized to miniplayer
+    [self setValue:@(NO) forKey:@"_pauseOnMinimize"];
+}
 %end

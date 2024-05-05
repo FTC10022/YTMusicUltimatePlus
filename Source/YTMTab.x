@@ -1,79 +1,28 @@
-#include "Prefs/YTMDownloads.h"
+#import "Headers/YTMBrowseViewController.h"
+#import "Headers/YTPivotBarView.h"
+#import "Headers/YTIPivotBarSupportedRenderers.h"
+#import "Headers/YTAssetLoader.h"
+#import "Prefs/YTMDownloads.h"
 
 static BOOL YTMU(NSString *key) {
     NSDictionary *YTMUltimateDict = [[NSUserDefaults standardUserDefaults] dictionaryForKey:@"YTMUltimate"];
     return [YTMUltimateDict[key] boolValue];
 }
 
-// https://gist.github.com/BandarHL/dce564ab717bed93d479fe849d654c75
-
-@interface YTMBrowseViewController: UIViewController
-@end
-
-@interface YTIFormattedString : NSObject
-+ (id)formattedStringWithString:(id)arg1;
-@end
-
-@interface YTIIcon : NSObject
-- (id)iconImageWithColor:(UIColor *)arg1;
-- (id)newIconImageWithColor:(id)arg1;
-@property(nonatomic) int iconType;
-@end
-
-@interface YTIBrowseEndpoint : NSObject
-@property(copy, nonatomic) NSString *browseId;
-@end
-
-@interface YTICommand : NSObject
-@property(retain, nonatomic) YTIBrowseEndpoint *browseEndpoint;
-@end
-
-@interface YTIPivotBarRenderer: NSObject
-@property (nonatomic, strong) NSMutableArray *itemsArray;
-@end
-
-@interface YTPivotBarView: UIView
-@property (nonatomic, strong, readwrite) YTIPivotBarRenderer *renderer;
-@end
-
-@interface YTIPivotBarItemRenderer : NSObject
-@property(retain, nonatomic) YTIIcon *icon; // @dynamic icon;
-@property(retain, nonatomic) YTICommand *navigationEndpoint; // @dynamic navigationEndpoint;
-@property(copy, nonatomic) NSString *pivotIdentifier;
-@property(retain, nonatomic) YTIFormattedString *title; // @dynamic title;
-@property(copy, nonatomic) NSData *trackingParams; // @dynamic trackingParams;
-@end
-
-@interface YTIPivotBarSupportedRenderers : NSObject
-@property(retain, nonatomic) YTIPivotBarItemRenderer *pivotBarItemRenderer;
-- (YTIPivotBarItemRenderer *)pivotBarItemRenderer;
-@end
-
-%hook YTMImageStyle
+%hook YTMPivotBarItemStyle
 - (UIImage *)pivotBarItemIconImageWithIconType:(int)type color:(UIColor *)color useNewIcons:(BOOL)isNew selected:(BOOL)isSelected {
 
     // Create image
-    NSString *imageName = isSelected ? @"downloads_selected" : @"downloads";
-    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(24, 24)];
-    UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext * _Nonnull rendererContext) {
-        UIImage *buttonImage = [UIImage imageWithContentsOfFile:[YTMusicUltimateBundle() pathForResource:imageName ofType:@"png" inDirectory:@"icons"]];
-        UIView *imageView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 24, 24)];
-        UIImageView *buttonImageView = [[UIImageView alloc] initWithImage:buttonImage];
-        buttonImageView.contentMode = UIViewContentModeScaleAspectFit;
-        buttonImageView.clipsToBounds = YES;
-        buttonImageView.tintColor = color;
-        buttonImageView.frame = imageView.bounds;
+    NSString *imageName = isSelected ? @"icons/downloads_selected" : @"icons/downloads";
 
-        [imageView addSubview:buttonImageView];
-        [imageView.layer renderInContext:rendererContext.CGContext];
-    }];
+    YTAssetLoader *al = [[%c(YTAssetLoader) alloc] initWithBundle:NSBundle.ytmu_defaultBundle];
 
     // Set our image if icon type is 1
-    return type == 1 ? image : %orig;
+    return type == 1 ? [al imageNamed:imageName] : %orig;
 }
-
 %end
 
+// https://gist.github.com/BandarHL/dce564ab717bed93d479fe849d654c75
 %hook YTPivotBarView
 - (void)setRenderer:(YTIPivotBarRenderer *)renderer {
     YTIBrowseEndpoint *endPoint = [[%c(YTIBrowseEndpoint) alloc] init];
